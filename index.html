@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>牛马人生</title>
+    <style>
+        /* 1. 基础设置：让网页撑满整个屏幕 */
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Microsoft YaHei', sans-serif;
+        }
+
+        /* 🎬 2. 视频背景专属样式：强行铺满，并且垫在最底层 */
+        #bg-video {
+            position: fixed; 
+            top: 0;
+            left: 0;
+            width: 100vw; 
+            height: 100vh; 
+            object-fit: cover; 
+            z-index: -1; 
+        }
+
+        /* 3. 待办卡片的外观：高级毛玻璃效果 */
+        .container {
+            background-color: rgba(255, 255, 255, 0.671);
+            backdrop-filter: blur(10px);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.712);
+            width: 350px;
+            /* 保证卡片永远在视频的上方 */
+            position: relative;
+            z-index: 1;
+        }
+
+        h2 { text-align: center; color: #333; margin-top: 0;}
+        .input-box { display: flex; margin-bottom: 20px; }
+        #todo-input { flex: 1; padding: 10px; border: none; border-radius: 4px 0 0 4px; outline: none; }
+        
+        #add-btn { 
+            padding: 10px 15px; 
+            background-color: #4CAF50; 
+            color: white; 
+            border: none; 
+            border-radius: 0 4px 4px 0; 
+            cursor: pointer; 
+        }
+        #add-btn:active { transform: scale(0.95); } /* 按钮按压真实手感 */
+
+        ul { list-style: none; padding: 0; margin: 0; }
+        li { padding: 10px 0; border-bottom: 1px solid #eee; }
+    </style>
+</head>
+<body>
+
+    <video autoplay loop muted playsinline id="bg-video">
+        <source src="https://haowallpaper.com/link//common/file/previewFileImg/19100675217773440" type="video/mp4">
+    </video>
+
+    <div class="container">
+        <h2>✨ 牛马待办清单</h2>
+        
+        <div class="input-box">
+            <input type="text" id="todo-input" placeholder="输入你今天要耕的田...">
+            <select id="priority-select" style="padding: 10px; border: none; outline: none; border-left: none; background: white; cursor: pointer;">
+                <option value="🟢">🟢 不急</option>
+                <option value="🟡">🟡 还好</option>
+                <option value="🔴">🔴 要命</option>
+            </select>
+            <button id="add-btn">添加</button>
+        </div>
+
+        <ul id="todo-list">
+            </ul>
+
+        <hr style="border: 1px dashed #ccc; margin: 30px 0 20px 0;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <h3 style="color: #888; font-size: 16px; margin: 0;">🕰️ 耕好的田</h3>
+            <button id="clear-history-btn" style="background: none; border: 1px solid #ff4d4f; color: #ff4d4f; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px;">一键清空</button>
+        </div>
+        <ul id="history-list">
+            </ul>
+    </div>
+
+    <script>
+        const addBtn = document.getElementById('add-btn');
+        const todoInput = document.getElementById('todo-input');
+        const todoList = document.getElementById('todo-list');
+        const historyList = document.getElementById('history-list');
+        const clearHistoryBtn = document.getElementById('clear-history-btn'); 
+
+        loadTodos();
+        loadHistory();
+
+        addBtn.addEventListener('click', function() {
+            // 1. 获取输入框里的文字
+            const inputValue = todoInput.value;
+            // 2. 获取下拉菜单里选中的颜色图标
+            const priorityIcon = document.getElementById('priority-select').value;
+            
+            // 如果没打字，就弹窗提醒并停止
+            if (inputValue === '') { alert('内容都没有，你添加个蛋啊！'); return; }
+            
+            // ✨ 3. 把颜色图标和文字拼在一起（中间加个空格更美观）
+            const finalTaskText = priorityIcon + ' ' + inputValue;
+            
+            createTodoElement(finalTaskText, false);
+            todoInput.value = ''; // 清空输入框
+            saveTodos(); // 保存到浏览器
+        });
+
+        function createTodoElement(text, isCompleted) {
+            const newTodo = document.createElement('li');
+            newTodo.style.display = 'flex';
+            newTodo.style.justifyContent = 'space-between';
+            newTodo.style.alignItems = 'center';
+            
+            const todoText = document.createElement('span');
+            todoText.innerText = text;
+            todoText.style.cursor = 'pointer';
+            
+            if (isCompleted) {
+                todoText.style.textDecoration = 'line-through';
+                todoText.style.color = '#bbb';
+            }
+            newTodo.appendChild(todoText);
+
+
+            // ✨ 【第三步新功能】：双击鼠标，原地修改文字
+            todoText.addEventListener('dblclick', function() {
+                const currentText = todoText.innerText; // 记住现有的文字
+                
+                // 变出一个带虚线边框的临时输入框
+                const editInput = document.createElement('input');
+                editInput.type = 'text';
+                editInput.value = currentText;
+                editInput.style.flex = '1';
+                editInput.style.padding = '5px';
+                editInput.style.marginRight = '10px';
+                editInput.style.border = '1px dashed #4CAF50';
+                editInput.style.outline = 'none';
+                editInput.style.background = 'transparent';
+
+                // 核心障眼法：把原来的文字藏起来，把临时输入框插进去
+                todoText.style.display = 'none';
+                newTodo.insertBefore(editInput, todoText);
+                editInput.focus(); // 让输入框自动进入打字状态
+
+                // 定义保存修改的动作
+                function saveEdit() {
+                    // 如果不小心删光了内容，就恢复修改前的文字
+                    if (editInput.value.trim() === '') {
+                        todoText.innerText = currentText;
+                    } else {
+                        todoText.innerText = editInput.value;
+                    }
+                    todoText.style.display = ''; // 文字重新出现
+                    editInput.remove(); // 临时输入框功成身退被销毁
+                    saveTodos(); // 更新到浏览器的记忆里
+                }
+
+                // 按下回车键保存
+                editInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        saveEdit();
+                    }
+                });
+
+                // 鼠标点击网页其他地方（失去焦点）也会自动保存
+                editInput.addEventListener('blur', function() {
+                    saveEdit();
+                });
+            });
+
+            // 【保留】彻底删除按钮
+            const delBtn = document.createElement('button');
+            delBtn.innerText = '完成';
+            delBtn.style.background = 'none';
+            delBtn.style.border = 'none';
+            delBtn.style.color = '#ff4d4f';
+            delBtn.style.cursor = 'pointer';
+            delBtn.style.fontWeight = 'bold';
+
+            delBtn.addEventListener('click', function() {
+                // 巧妙升级：删除时抓取现在的文字（防止你修改了文字，历史记录里还是旧的）
+                addHistory(todoText.innerText); 
+                newTodo.remove();
+                saveTodos();
+            });
+
+            newTodo.appendChild(delBtn);
+            todoList.appendChild(newTodo);
+        }
+
+        function saveTodos() {
+            const todos = [];
+            const lis = todoList.querySelectorAll('li');
+            lis.forEach(function(li) {
+                const text = li.querySelector('span').innerText;
+                const isCompleted = li.querySelector('span').style.textDecoration === 'line-through';
+                todos.push({ text: text, completed: isCompleted });
+            });
+            localStorage.setItem('my_todos', JSON.stringify(todos));
+        }
+
+        function loadTodos() {
+            const savedTodos = localStorage.getItem('my_todos');
+            if (savedTodos) {
+                const todos = JSON.parse(savedTodos);
+                todos.forEach(function(todo) {
+                    createTodoElement(todo.text, todo.completed);
+                });
+            }
+        }
+
+        function addHistory(text) {
+            const now = new Date();
+            const timeString = now.getMonth() + 1 + '月' + now.getDate() + '日 ' + now.getHours() + ':' + (now.getMinutes() < 10 ? '0' : '') + now.getMinutes();
+            const historyText = text + ' (完成于 ' + timeString + ')';
+
+            let historyArray = [];
+            const savedHistory = localStorage.getItem('my_history');
+            if (savedHistory) {
+                historyArray = JSON.parse(savedHistory);
+            }
+            
+            historyArray.unshift(historyText);
+            localStorage.setItem('my_history', JSON.stringify(historyArray));
+            loadHistory();
+        }
+
+        function loadHistory() {
+            historyList.innerHTML = '';
+            const savedHistory = localStorage.getItem('my_history');
+            if (savedHistory) {
+                let historyArray = JSON.parse(savedHistory); 
+                
+                historyArray.forEach(function(item, index) {
+                    const li = document.createElement('li');
+                    
+                    const textSpan = document.createElement('span');
+                    textSpan.innerText = item;
+                    li.appendChild(textSpan);
+
+                    li.style.backgroundColor = 'rgba(240, 240, 240, 0.5)';
+                    li.style.color = '#888';
+                    li.style.fontSize = '14px';
+                    li.style.border = 'none';
+                    li.style.display = 'flex';
+                    li.style.justifyContent = 'space-between';
+                    li.style.alignItems = 'center';
+                    li.style.padding = '8px';
+                    li.style.marginTop = '5px';
+                    li.style.borderRadius = '4px';
+
+                    const realDelBtn = document.createElement('button');
+                    realDelBtn.innerText = '单项忘本';
+                    realDelBtn.style.background = 'none';
+                    realDelBtn.style.border = 'none';
+                    realDelBtn.style.color = '#ff4d4f';
+                    realDelBtn.style.cursor = 'pointer';
+                    realDelBtn.style.fontSize = '12px';
+
+                    realDelBtn.addEventListener('click', function() {
+                        historyArray.splice(index, 1);
+                        localStorage.setItem('my_history', JSON.stringify(historyArray));
+                        loadHistory();
+                    });
+
+                    li.appendChild(realDelBtn);
+                    historyList.appendChild(li);
+                });
+            }
+        }
+
+        clearHistoryBtn.addEventListener('click', function() {
+            if (confirm('你铁了心要忘本是吧')) {
+                localStorage.removeItem('my_history');
+                loadHistory();
+            }
+        });
+        // ✨【第一步新功能】：给输入框装上键盘雷达
+        todoInput.addEventListener('keypress', function(event) {
+            // 如果雷达探测到按下的键叫 'Enter'（回车键）
+            if (event.key === 'Enter') {
+                // 召唤代码里的虚拟手指，帮我们点一下“添加”按钮
+                addBtn.click(); 
+            }
+        });
+    </script>
+</body>
+</html>
